@@ -1,124 +1,285 @@
-import type { Metadata } from "next";
-import { PenTool, Clock, ArrowRight, CheckCircle2, BarChart3, FileEdit, Sparkles } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+"use client";
+
+import { useState, useEffect } from "react";
+import { PenTool, Clock, FileText, Send, AlertCircle, RefreshCw, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
-export const metadata: Metadata = { title: "Writing Module" };
+const PROMPT_TEXT = "Some people believe that the rapid development of artificial intelligence will lead to widespread unemployment, while others argue it will create new types of jobs and boost the economy.\n\nDiscuss both these views and give your own opinion.";
 
-const tasks = [
-  { id: 1, title: "Task 1: Bar Chart — Internet Usage", type: "Task 1", duration: "20 min", difficulty: "Medium", completed: true, band: "6.5" },
-  { id: 2, title: "Task 2: Essay — Technology & Education", type: "Task 2", duration: "40 min", difficulty: "Medium", completed: true, band: "6.0" },
-  { id: 3, title: "Task 1: Process Diagram — Water Treatment", type: "Task 1", duration: "20 min", difficulty: "Hard", completed: false, band: null },
-  { id: 4, title: "Task 2: Essay — Environment vs Economy", type: "Task 2", duration: "40 min", difficulty: "Hard", completed: false, band: null },
-  { id: 5, title: "Task 1: Line Graph — Population Growth", type: "Task 1", duration: "20 min", difficulty: "Easy", completed: false, band: null },
-  { id: 6, title: "Task 2: Essay — Urbanization Impacts", type: "Task 2", duration: "40 min", difficulty: "Medium", completed: false, band: null },
-];
+type EvaluationResult = {
+  overallBand: number;
+  scores: {
+    taskResponse: number;
+    coherence: number;
+    lexical: number;
+    grammar: number;
+  };
+  feedback: string;
+  strengths: string[];
+  weaknesses: string[];
+};
 
-const criteria = [
-  { name: "Task Achievement", score: 6.0, max: 9 },
-  { name: "Coherence & Cohesion", score: 6.5, max: 9 },
-  { name: "Lexical Resource", score: 6.0, max: 9 },
-  { name: "Grammar Range", score: 5.5, max: 9 },
-];
+export default function WritingModulePage() {
+  const [text, setText] = useState("");
+  const [timeLeft, setTimeLeft] = useState(60 * 60); // 60 minutes
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
 
-export default function WritingPage() {
+  const supabase = createClient();
+
+  // Derive word count efficiently (split by whitespace, ignore empty)
+  const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+  
+  // Format time
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  
+  // Timer effect
+  useEffect(() => {
+    if (timeLeft <= 0 || evaluation) return;
+    const timerId = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    return () => clearInterval(timerId);
+  }, [timeLeft, evaluation]);
+
+  const handleSubmit = async () => {
+    if (wordCount < 50) {
+      toast.error("Your essay is too short. Please write at least 50 words before submitting.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setEvaluation(null);
+    const toastId = toast.loading("The Examiner is grading your essay...");
+
+    try {
+      // 1. Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("You must be logged in to save scores.");
+
+      // 2. Evaluate with Gemini API
+      const res = await fetch("/api/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ essayText: text, promptText: PROMPT_TEXT }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to evaluate essay");
+      }
+
+      const result: EvaluationResult = await res.json();
+      setEvaluation(result);
+
+      // 3. Save to Supabase
+      const { error: dbError } = await supabase.from("ielts_scores").insert({
+        user_id: user.id,
+        module: "Writing",
+        task_title: "Task 2: AI & Employment",
+        band_score: result.overallBand,
+        feedback: JSON.stringify(result) // Save the full result as feedback
+      });
+
+      if (dbError) {
+        console.error("Supabase Error Detail:", dbError);
+        throw new Error(`DB Error: ${dbError.message || dbError.details}`);
+      }
+
+      toast.success("Evaluation complete! Your score has been saved.", { id: toastId });
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "An unexpected error occurred.", { id: toastId });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-500/25">
-            <PenTool className="h-7 w-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Writing Module</h1>
-            <p className="text-muted-foreground text-sm">Craft essays and reports with AI-powered feedback</p>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Badge variant="outline" className="gap-1.5 py-1.5 px-3"><BarChart3 className="h-3.5 w-3.5" />Band 6.0</Badge>
-          <Badge variant="outline" className="gap-1.5 py-1.5 px-3"><CheckCircle2 className="h-3.5 w-3.5" />2/6 Complete</Badge>
-        </div>
-      </div>
-
-      {/* AI Feedback Banner */}
-      <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-400 overflow-hidden">
-        <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-white">
-            <div className="h-12 w-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center"><Sparkles className="h-6 w-6" /></div>
-            <div>
-              <h3 className="font-semibold text-lg">AI Writing Assistant</h3>
-              <p className="text-white/80 text-sm">Get instant feedback on grammar, coherence, and task response</p>
+    <div className="flex flex-col min-h-[calc(100vh-4rem-3rem)] sm:min-h-[calc(100vh-4rem-4rem)] max-w-7xl mx-auto animate-fade-in pb-12">
+      {/* Top Bar / Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 shrink-0">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <PenTool className="h-4 w-4 text-white" />
             </div>
-          </div>
-          <Button className="bg-white text-emerald-600 hover:bg-white/90 font-semibold rounded-xl shadow-xl shrink-0">
-            <FileEdit className="mr-2 h-4 w-4" />Free Write
-          </Button>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-3">
-          <h2 className="text-lg font-semibold mb-1">Writing Tasks</h2>
-          {tasks.map((t) => (
-            <Card key={t.id} className="border bg-card card-hover">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${t.completed ? "bg-emerald-500/10 text-emerald-500" : "bg-muted text-muted-foreground"}`}>
-                    {t.completed ? <CheckCircle2 className="h-5 w-5" /> : <PenTool className="h-5 w-5" />}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{t.title}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                      <Badge variant="secondary" className="text-[10px] py-0 h-5">{t.type}</Badge>
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{t.duration}</span>
-                      <Badge variant="secondary" className="text-[10px] py-0 h-5">{t.difficulty}</Badge>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {t.band && <span className="text-sm font-semibold text-emerald-500">Band {t.band}</span>}
-                  <Button size="sm" variant={t.completed ? "outline" : "default"} className={`rounded-lg text-xs ${!t.completed ? "gradient-primary text-white border-0" : ""}`}>
-                    {t.completed ? "Revise" : "Write"}<ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+            Writing Task 2
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">Aim for at least 250 words.</p>
         </div>
-
-        <div className="space-y-4">
-          <Card className="border bg-card">
-            <CardContent className="p-5">
-              <h3 className="font-semibold mb-3">📊 Score Breakdown</h3>
-              <div className="space-y-3">
-                {criteria.map((c) => (
-                  <div key={c.name}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-muted-foreground">{c.name}</span>
-                      <span className="font-medium">{c.score}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${(c.score / c.max) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border bg-card">
-            <CardContent className="p-5">
-              <h3 className="font-semibold mb-2">Your Stats</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Essays Written</span><span className="font-medium">12</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Avg Band</span><span className="font-medium">6.0</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Best Band</span><span className="font-medium">6.5</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Words Written</span><span className="font-medium">8,400</span></div>
-              </div>
-            </CardContent>
-          </Card>
+        
+        <div className="flex items-center gap-4">
+          <Badge 
+            variant={wordCount >= 250 ? "default" : "secondary"} 
+            className={`text-sm px-3 py-1.5 transition-colors ${wordCount >= 250 ? "bg-emerald-500 hover:bg-emerald-600 text-white" : ""}`}
+          >
+            {wordCount} / 250 words
+          </Badge>
+          <div className={`flex items-center gap-2 font-mono text-lg font-semibold px-4 py-1.5 rounded-xl border shadow-sm transition-colors ${timeLeft < 300 ? 'text-destructive border-destructive/50 bg-destructive/10' : 'bg-card'}`}>
+            <Clock className="h-5 w-5" />
+            {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+          </div>
         </div>
       </div>
+
+      {/* Split Screen Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[600px] mb-8">
+        
+        {/* Left Side: Mock Prompt */}
+        <Card className="border bg-card shadow-sm overflow-hidden flex flex-col h-full">
+          <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-400 w-full shrink-0" />
+          <CardHeader className="shrink-0 pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5 text-emerald-500" />
+              Essay Prompt
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-y-auto flex-1 pb-6">
+            <div className="space-y-6 text-base leading-relaxed">
+              <div className="p-5 rounded-2xl bg-muted/50 border">
+                <p className="font-semibold mb-3 text-foreground/80">You should spend about 40 minutes on this task.</p>
+                <p className="mb-3 text-muted-foreground">Write about the following topic:</p>
+                
+                <div className="p-5 bg-background rounded-xl border shadow-sm font-medium italic text-lg text-foreground/90 border-l-4 border-l-emerald-500">
+                  "{PROMPT_TEXT.split('\n\n')[0]}"
+                </div>
+                
+                <p className="mt-5 font-semibold text-foreground/90">{PROMPT_TEXT.split('\n\n')[1]}</p>
+                <p className="mt-2 text-sm text-muted-foreground">Give reasons for your answer and include any relevant examples from your own knowledge or experience.</p>
+              </div>
+              
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-semibold mb-1">Writing Tips:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-1 opacity-90">
+                    <li>Structure with a clear introduction, body paragraphs, and conclusion.</li>
+                    <li>Use a wide range of vocabulary and complex sentence structures.</li>
+                    <li>Ensure your position is clear throughout the response.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Right Side: Interactive Editor */}
+        <Card className="border bg-card shadow-sm flex flex-col h-full overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/30 transition-shadow">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={isSubmitting || !!evaluation}
+            placeholder="Start typing your essay here..."
+            className="flex-1 w-full p-6 resize-none outline-none bg-transparent text-base leading-relaxed disabled:opacity-50"
+            spellCheck={false}
+          />
+          
+          <div className="p-4 border-t bg-muted/30 shrink-0 flex items-center justify-between backdrop-blur-sm">
+            <Button variant="ghost" size="sm" onClick={() => setText("")} disabled={isSubmitting || !!evaluation} className="text-muted-foreground hover:text-destructive">
+              <RefreshCw className="h-4 w-4 mr-2" /> Clear
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting || wordCount === 0 || !!evaluation}
+              className="bg-gradient-to-r from-emerald-500 to-teal-400 text-white hover:from-emerald-600 hover:to-teal-500 border-0 shadow-lg shadow-emerald-500/20 rounded-xl px-6 transition-all"
+            >
+              {isSubmitting ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Grading...</>
+              ) : (
+                <>Submit Essay <Send className="ml-2 h-4 w-4" /></>
+              )}
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Evaluation Results Card */}
+      {evaluation && (
+        <Card className="border-emerald-500/30 shadow-xl shadow-emerald-500/10 overflow-hidden animate-fade-in">
+          <div className="h-2 bg-gradient-to-r from-emerald-500 to-teal-400 w-full" />
+          <CardContent className="p-8">
+            <div className="flex flex-col md:flex-row gap-8 items-start">
+              
+              {/* Overall Score Circle */}
+              <div className="flex flex-col items-center justify-center shrink-0 mx-auto md:mx-0">
+                <div className="h-32 w-32 rounded-full border-8 border-emerald-500/20 flex flex-col items-center justify-center bg-emerald-500/5 relative">
+                  <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {evaluation.overallBand ? Number(evaluation.overallBand).toFixed(1) : "N/A"}
+                  </span>
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">Band</span>
+                  <svg className="absolute inset-0 h-full w-full -rotate-90 transform" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="46" fill="transparent" stroke="currentColor" strokeWidth="8" className="text-emerald-500" strokeDasharray={`${(evaluation.overallBand / 9) * 289} 289`} />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Detailed Breakdown */}
+              <div className="flex-1 space-y-6 w-full">
+                <div>
+                  <h3 className="text-xl font-bold mb-3">Examiner Feedback</h3>
+                  <p className="text-muted-foreground leading-relaxed bg-muted/30 p-4 rounded-xl border">
+                    {evaluation.feedback}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-xl bg-muted/50 text-center border">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Task Response</p>
+                    <p className="text-2xl font-bold">{evaluation.scores.taskResponse.toFixed(1)}</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50 text-center border">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Coherence</p>
+                    <p className="text-2xl font-bold">{evaluation.scores.coherence.toFixed(1)}</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50 text-center border">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Lexical</p>
+                    <p className="text-2xl font-bold">{evaluation.scores.lexical.toFixed(1)}</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-muted/50 text-center border">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mb-1">Grammar</p>
+                    <p className="text-2xl font-bold">{evaluation.scores.grammar.toFixed(1)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Strengths & Weaknesses */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 pt-8 border-t">
+              <div>
+                <h4 className="font-semibold text-emerald-600 dark:text-emerald-400 mb-4 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5" /> Key Strengths
+                </h4>
+                <ul className="space-y-3">
+                  {evaluation.strengths.map((s, i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-foreground/80">
+                      <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                      <span className="leading-relaxed">{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold text-destructive mb-4 flex items-center gap-2">
+                  <XCircle className="h-5 w-5" /> Areas for Improvement
+                </h4>
+                <ul className="space-y-3">
+                  {evaluation.weaknesses.map((w, i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-foreground/80">
+                      <div className="h-1.5 w-1.5 rounded-full bg-destructive mt-2 shrink-0" />
+                      <span className="leading-relaxed">{w}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
     </div>
   );
 }
