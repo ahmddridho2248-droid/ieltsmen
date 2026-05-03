@@ -8,7 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 
-const PROMPT_TEXT = "Some people believe that the rapid development of artificial intelligence will lead to widespread unemployment, while others argue it will create new types of jobs and boost the economy.\n\nDiscuss both these views and give your own opinion.";
+const MOCK_QUESTIONS = [
+  "Some people believe that the rapid development of artificial intelligence will lead to widespread unemployment, while others argue it will create new types of jobs and boost the economy.\n\nDiscuss both these views and give your own opinion.",
+  "In many countries, the proportion of older people is steadily increasing. Does this trend have more positive or negative effects on society?\n\nGive your own opinion and include relevant examples.",
+  "Nowadays, many families have both parents working full time. What are the advantages and disadvantages of this trend?\n\nDiscuss both sides and give your own opinion.",
+  "Some people think that university education should be free for everyone. Others think that students should pay for their higher education.\n\nDiscuss both these views and give your own opinion.",
+  "The internet has dramatically changed the way people communicate and work. However, some argue it has also isolated people socially.\n\nTo what extent do you agree or disagree?"
+];
 
 type EvaluationResult = {
   overallBand: number;
@@ -28,6 +34,28 @@ export default function WritingModulePage() {
   const [timeLeft, setTimeLeft] = useState(60 * 60); // 60 minutes
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
+
+  const [currentQuestion, setCurrentQuestion] = useState(MOCK_QUESTIONS[0]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshQuestion = async () => {
+    setIsRefreshing(true);
+    // Simulate a brief delay for UI feedback
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    let newQuestion;
+    do {
+      newQuestion = MOCK_QUESTIONS[Math.floor(Math.random() * MOCK_QUESTIONS.length)];
+    } while (newQuestion === currentQuestion && MOCK_QUESTIONS.length > 1);
+    
+    setCurrentQuestion(newQuestion);
+    setIsRefreshing(false);
+  };
+
+  useEffect(() => {
+    handleRefreshQuestion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const supabase = createClient();
 
@@ -64,7 +92,7 @@ export default function WritingModulePage() {
       const res = await fetch("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ essayText: text, promptText: PROMPT_TEXT }),
+        body: JSON.stringify({ essayText: text, promptText: currentQuestion }),
       });
 
       if (!res.ok) {
@@ -79,7 +107,7 @@ export default function WritingModulePage() {
       const { error: dbError } = await supabase.from("ielts_scores").insert({
         user_id: user.id,
         module: "Writing",
-        task_title: "Task 2: AI & Employment",
+        task_title: `Task 2: ${currentQuestion.substring(0, 40)}...`,
         band_score: result.overallBand,
         feedback: JSON.stringify(result) // Save the full result as feedback
       });
@@ -132,23 +160,37 @@ export default function WritingModulePage() {
         {/* Left Side: Mock Prompt */}
         <Card className="border bg-card shadow-sm overflow-hidden flex flex-col h-full">
           <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-400 w-full shrink-0" />
-          <CardHeader className="shrink-0 pb-4">
+          <CardHeader className="shrink-0 pb-4 flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileText className="h-5 w-5 text-emerald-500" />
               Essay Prompt
             </CardTitle>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRefreshQuestion} 
+              disabled={isRefreshing || isSubmitting || !!evaluation}
+            >
+              {isRefreshing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Refresh Soal
+            </Button>
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 pb-6">
             <div className="space-y-6 text-base leading-relaxed">
-              <div className="p-5 rounded-2xl bg-muted/50 border">
+              <div className="p-5 rounded-2xl bg-muted/50 border relative">
+                {isRefreshing && (
+                  <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-2xl">
+                    <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+                  </div>
+                )}
                 <p className="font-semibold mb-3 text-foreground/80">You should spend about 40 minutes on this task.</p>
                 <p className="mb-3 text-muted-foreground">Write about the following topic:</p>
                 
                 <div className="p-5 bg-background rounded-xl border shadow-sm font-medium italic text-lg text-foreground/90 border-l-4 border-l-emerald-500">
-                  "{PROMPT_TEXT.split('\n\n')[0]}"
+                  "{currentQuestion.split('\n\n')[0]}"
                 </div>
                 
-                <p className="mt-5 font-semibold text-foreground/90">{PROMPT_TEXT.split('\n\n')[1]}</p>
+                <p className="mt-5 font-semibold text-foreground/90">{currentQuestion.split('\n\n')[1]}</p>
                 <p className="mt-2 text-sm text-muted-foreground">Give reasons for your answer and include any relevant examples from your own knowledge or experience.</p>
               </div>
               
