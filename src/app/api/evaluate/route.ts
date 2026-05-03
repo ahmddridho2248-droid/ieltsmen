@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
+import { createClient } from '@/lib/supabase/server';
 
 // Initialize the Google Gen AI SDK
 // Ensure GEMINI_API_KEY is set in your .env.local file
@@ -46,6 +47,31 @@ export async function POST(request: Request) {
 
     // Parse the response to ensure it's valid JSON before sending to the client
     const jsonResponse = JSON.parse(response.text);
+
+    // Save to Supabase (writing_evaluations)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { error: dbError } = await supabase.from('writing_evaluations').insert({
+        user_id: user.id,
+        question: promptText,
+        essay: essayText,
+        overall_score: jsonResponse.overallBand,
+        tr_score: jsonResponse.scores?.taskResponse,
+        cc_score: jsonResponse.scores?.coherence,
+        lr_score: jsonResponse.scores?.lexical,
+        gra_score: jsonResponse.scores?.grammar,
+        detailed_feedback: jsonResponse.feedback,
+      });
+
+      if (dbError) {
+        console.error("Failed to insert writing evaluation to Supabase:", dbError);
+        // Continue and return the response even if DB save fails
+      }
+    } else {
+      console.warn("No active user session found. Writing evaluation not saved to database.");
+    }
 
     return NextResponse.json(jsonResponse);
     
