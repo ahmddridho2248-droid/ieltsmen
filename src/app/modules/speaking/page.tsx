@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, Square, Loader2, Volume2, Send, Timer } from 'lucide-react';
+import { Mic, Square, Loader2, Volume2, Send, Timer, RefreshCw } from 'lucide-react';
 
 // Define SpeechRecognition types
 declare global {
@@ -16,7 +16,9 @@ declare global {
 export default function SpeakingPracticePage() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [currentPart, setCurrentPart] = useState(2); // Set to 2 to show Part 2 UI by default for testing
+  const [currentPart, setCurrentPart] = useState(1);
+  const [questionText, setQuestionText] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
@@ -26,9 +28,33 @@ export default function SpeakingPracticePage() {
   const [speakTime, setSpeakTime] = useState(120);
   const [timerPhase, setTimerPhase] = useState<'idle' | 'prep' | 'speak'>('idle');
 
-  const questionText = "Let's talk about your hometown. Where are you from?";
+  const handleRefreshQuestion = async () => {
+    setIsRefreshing(true);
+    setTranscript("");
+    setEvaluationResult(null);
+    try {
+      const res = await fetch("/api/generate-speaking-question");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setCurrentPart(data.part);
+      setQuestionText(data.question);
+      setTimerPhase('idle');
+      setPrepTime(60);
+      setSpeakTime(120);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to refresh question.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
-  const handleTTS = () => {
+  useEffect(() => {
+    handleRefreshQuestion();
+  }, []);
+
+  const readQuestion = () => {
+    if (!questionText) return;
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel(); // Cancel any ongoing speech
       const utterance = new SpeechSynthesisUtterance(questionText);
@@ -48,7 +74,7 @@ export default function SpeakingPracticePage() {
       const res = await fetch("/api/evaluate-speaking", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: questionText, transcript })
+        body: JSON.stringify({ question: questionText, transcript, part: currentPart })
       });
       if (!res.ok) throw new Error("Failed to evaluate");
       const data = await res.json();
@@ -97,13 +123,19 @@ export default function SpeakingPracticePage() {
   }, []);
 
   const startRecording = () => {
+    if (isRecording) return;
     if (recognitionRef.current) {
       setTranscript('');
       try {
         recognitionRef.current.start();
         setIsRecording(true);
-      } catch (error) {
-        console.error("Error starting recognition", error);
+      } catch (error: any) {
+        if (error.message && error.message.includes("already started")) {
+          // Silent fail for already started error, just update state
+          setIsRecording(true);
+        } else {
+          console.error("Error starting recognition", error);
+        }
       }
     } else {
       alert('Your browser does not support Speech Recognition. Please use Chrome, Edge, or Safari.');
@@ -125,8 +157,10 @@ export default function SpeakingPracticePage() {
       interval = setInterval(() => {
         setPrepTime((prev) => {
           if (prev <= 1) {
-            setTimerPhase('speak');
-            startRecording();
+            if (timerPhase === 'prep') {
+              setTimerPhase('speak');
+              if (!isRecording) startRecording();
+            }
             return 0;
           }
           return prev - 1;
@@ -161,42 +195,42 @@ export default function SpeakingPracticePage() {
           <h1 className="text-3xl font-bold tracking-tight text-primary">IELTS Speaking Practice</h1>
           <p className="text-muted-foreground mt-2">Practice speaking with real-time transcription</p>
         </div>
+        <Button 
+          variant="outline" 
+          onClick={handleRefreshQuestion} 
+          disabled={isRefreshing || isRecording}
+          className="gap-2 shadow-sm"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Refresh Soal
+        </Button>
       </div>
 
       <Card className="border-2 shadow-sm">
         <CardHeader className="bg-muted/30 border-b flex flex-row items-center justify-between">
-          {currentPart === 2 ? (
-            <CardTitle className="flex items-center gap-3 text-lg">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
-                2
-              </span>
-              Part 2: Cue Card
-            </CardTitle>
-          ) : (
-            <CardTitle className="flex items-center gap-3 text-lg">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
-                {currentPart}
-              </span>
-              Part {currentPart}: {questionText}
-            </CardTitle>
-          )}
-          <Button variant="ghost" size="icon" onClick={handleTTS} title="Listen to question">
+          <CardTitle className="flex items-center gap-3 text-lg">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+              {currentPart}
+            </span>
+            Part {currentPart} {currentPart === 2 && ': Cue Card'}
+          </CardTitle>
+          <Button variant="ghost" size="icon" onClick={readQuestion} title="Listen to question">
             <Volume2 className="h-5 w-5 text-primary" />
           </Button>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
-          {currentPart === 2 && (
-            <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
-              <h3 className="font-bold text-xl mb-4 text-primary">Describe a memorable journey you have made</h3>
-              <p className="mb-2 text-muted-foreground font-medium">You should say:</p>
-              <ul className="list-disc pl-6 space-y-2 mb-4 text-slate-700 dark:text-slate-300">
-                <li>Where you went</li>
-                <li>How you traveled</li>
-                <li>Why you went on the journey</li>
-              </ul>
-              <p className="text-muted-foreground font-medium">and explain why it is memorable</p>
-            </div>
-          )}
+          <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm min-h-[100px] flex items-center justify-center">
+            {isRefreshing ? (
+               <div className="flex items-center justify-center text-muted-foreground font-medium gap-3">
+                 <Loader2 className="h-5 w-5 animate-spin" />
+                 Generating new question...
+               </div>
+            ) : (
+               <div className="w-full text-lg leading-relaxed font-medium whitespace-pre-wrap text-slate-800 dark:text-slate-200">
+                 {questionText}
+               </div>
+            )}
+          </div>
 
           {currentPart === 2 && timerPhase !== 'idle' && (
             <div className="flex flex-col items-center justify-center py-4 bg-muted/10 rounded-xl border border-muted/50">

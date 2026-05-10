@@ -69,3 +69,31 @@ create policy "Users can insert their own writing evaluations"
 create policy "Users can view their own writing evaluations"
     on public.writing_evaluations for select
     using (auth.uid() = user_id);
+
+-- Create speaking_evaluations table
+create table public.speaking_evaluations (
+    id uuid default uuid_generate_v4() primary key,
+    user_id uuid references auth.users(id) on delete cascade not null,
+    part int,
+    question text not null,
+    transcript text not null,
+    overall_score numeric(3,1),
+    fc_score numeric(3,1),
+    lr_score numeric(3,1),
+    gra_score numeric(3,1),
+    pron_score numeric(3,1),
+    detailed_feedback text,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS for speaking_evaluations
+alter table public.speaking_evaluations enable row level security;
+
+-- Create policies for speaking_evaluations
+create policy "Users can insert their own speaking evaluations"
+    on public.speaking_evaluations for insert
+    with check (auth.uid() = user_id);
+
+create policy "Users can view their own speaking evaluations"
+    on public.speaking_evaluations for select
+    using (auth.uid() = user_id);

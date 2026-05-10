@@ -19,6 +19,17 @@ export default async function DashboardPage() {
     .eq('user_id', user?.id)
     .order('created_at', { ascending: true });
 
+  // Fetch latest speaking evaluation
+  const { data: latestSpeaking } = await supabase
+    .from('speaking_evaluations')
+    .select('overall_score')
+    .eq('user_id', user?.id)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const speakingScore = latestSpeaking?.[0]?.overall_score;
+  const writingScore = evaluations && evaluations.length > 0 ? evaluations[evaluations.length - 1].overall_score : null;
+
   const moduleCards = [
     { title: "Listening", desc: "Audio comprehension practice", icon: Headphones, href: "/modules/listening", gradient: "from-blue-500 to-cyan-400" },
     { title: "Reading", desc: "Passage analysis & questions", icon: BookOpen, href: "/modules/reading", gradient: "from-purple-500 to-pink-400" },
@@ -66,6 +77,40 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chart Section */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card className="border bg-card hover:border-emerald-500/50 transition-colors">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Writing Score (Latest)</p>
+                    <p className="text-3xl font-bold">{writingScore ? Number(writingScore).toFixed(1) : '-'}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                    <PenTool className="h-5 w-5" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border bg-card hover:border-orange-500/50 transition-colors">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Speaking Score (Latest)</p>
+                    <p className="text-3xl font-bold">{speakingScore ? Number(speakingScore).toFixed(1) : '-'}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-orange-500/10 text-orange-500 flex items-center justify-center">
+                    <Mic className="h-5 w-5" />
+                  </div>
+                </div>
+                <Link href="/dashboard/speaking" className="text-xs font-semibold text-primary hover:underline mt-4 inline-flex items-center gap-1">
+                  View Speaking History <ArrowRight className="h-3 w-3" />
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+
           <Card className="border bg-card h-full">
             <CardHeader>
               <CardTitle>Score Progression</CardTitle>
