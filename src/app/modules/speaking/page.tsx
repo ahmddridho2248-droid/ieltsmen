@@ -55,7 +55,7 @@ export default function SpeakingPracticePage() {
 
   const readQuestion = () => {
     if (!questionText) return;
-    if ('speechSynthesis' in window) {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel(); // Cancel any ongoing speech
       const utterance = new SpeechSynthesisUtterance(questionText);
       utterance.lang = 'en-GB';

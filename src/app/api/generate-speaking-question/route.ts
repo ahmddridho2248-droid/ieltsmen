@@ -30,7 +30,12 @@ export async function GET() {
         throw new Error("No response generated from Gemini");
     }
 
-    const data = JSON.parse(response.text);
+    // Sanitise AI response: strip accidental markdown fences before parsing
+    const cleanText = response.text
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
+    const data = JSON.parse(cleanText);
 
     return NextResponse.json(data);
     

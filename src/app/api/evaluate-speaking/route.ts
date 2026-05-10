@@ -59,26 +59,26 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (user) {
-      const { error: dbError } = await supabase.from('speaking_evaluations').insert({
-        user_id: user.id,
-        part: part || 1, // Default to 1 if part is not provided
-        question: question,
-        transcript: transcript,
-        overall_score: overallScore,
-        fc_score: fcScore,
-        lr_score: lrScore,
-        gra_score: graScore,
-        pron_score: pronScore,
-        detailed_feedback: response.text,
-      });
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-      if (dbError) {
-        console.error("Failed to insert speaking evaluation to Supabase:", dbError);
-        // Continue and return the response even if DB save fails
-      }
-    } else {
-      console.warn("No active user session found. Speaking evaluation not saved to database.");
+    const { error: dbError } = await supabase.from('speaking_evaluations').insert({
+      user_id: user.id,
+      part: part || 1,
+      question: question,
+      transcript: transcript,
+      overall_score: overallScore,
+      fc_score: fcScore,
+      lr_score: lrScore,
+      gra_score: graScore,
+      pron_score: pronScore,
+      detailed_feedback: response.text,
+    });
+
+    if (dbError) {
+      console.error("Failed to insert speaking evaluation to Supabase:", dbError);
+      // Continue and return the evaluation even if DB save fails
     }
 
     return NextResponse.json({ evaluation: response.text });

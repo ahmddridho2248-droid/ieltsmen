@@ -45,32 +45,36 @@ export async function POST(request: Request) {
         throw new Error("No response generated from Gemini");
     }
 
-    // Parse the response to ensure it's valid JSON before sending to the client
-    const jsonResponse = JSON.parse(response.text);
+    // Sanitise AI response: strip accidental markdown fences before parsing
+    const cleanText = response.text
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
+    const jsonResponse = JSON.parse(cleanText);
 
     // Save to Supabase (writing_evaluations)
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (user) {
-      const { error: dbError } = await supabase.from('writing_evaluations').insert({
-        user_id: user.id,
-        question: promptText,
-        essay: essayText,
-        overall_score: jsonResponse.overallBand,
-        tr_score: jsonResponse.scores?.taskResponse,
-        cc_score: jsonResponse.scores?.coherence,
-        lr_score: jsonResponse.scores?.lexical,
-        gra_score: jsonResponse.scores?.grammar,
-        detailed_feedback: jsonResponse.feedback,
-      });
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-      if (dbError) {
-        console.error("Failed to insert writing evaluation to Supabase:", dbError);
-        // Continue and return the response even if DB save fails
-      }
-    } else {
-      console.warn("No active user session found. Writing evaluation not saved to database.");
+    const { error: dbError } = await supabase.from('writing_evaluations').insert({
+      user_id: user.id,
+      question: promptText,
+      essay: essayText,
+      overall_score: jsonResponse.overallBand,
+      tr_score: jsonResponse.scores?.taskResponse,
+      cc_score: jsonResponse.scores?.coherence,
+      lr_score: jsonResponse.scores?.lexical,
+      gra_score: jsonResponse.scores?.grammar,
+      detailed_feedback: jsonResponse.feedback,
+    });
+
+    if (dbError) {
+      console.error("Failed to insert writing evaluation to Supabase:", dbError);
+      // Continue and return the evaluation even if DB save fails
     }
 
     return NextResponse.json(jsonResponse);
