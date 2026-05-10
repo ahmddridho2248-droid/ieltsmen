@@ -1,124 +1,137 @@
-import type { Metadata } from "next";
-import { Mic, Clock, ArrowRight, CheckCircle2, BarChart3, MessageSquare, Video } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+'use client';
 
-export const metadata: Metadata = { title: "Speaking Module" };
+import { useState, useRef, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Mic, Square, Loader2 } from 'lucide-react';
 
-const sessions = [
-  { id: 1, title: "Part 1: Introduction — Work & Studies", part: "Part 1", duration: "5 min", difficulty: "Easy", completed: true, band: "7.0" },
-  { id: 2, title: "Part 2: Describe a Book You Read", part: "Part 2", duration: "4 min", difficulty: "Medium", completed: true, band: "7.0" },
-  { id: 3, title: "Part 3: Discussion — Reading Habits", part: "Part 3", duration: "5 min", difficulty: "Hard", completed: true, band: "6.5" },
-  { id: 4, title: "Part 1: Introduction — Hobbies", part: "Part 1", duration: "5 min", difficulty: "Easy", completed: false, band: null },
-  { id: 5, title: "Part 2: Describe a Journey", part: "Part 2", duration: "4 min", difficulty: "Medium", completed: false, band: null },
-  { id: 6, title: "Full Mock Interview", part: "Full", duration: "14 min", difficulty: "Hard", completed: false, band: null },
-];
+// Define SpeechRecognition types
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
 
-const fluencyCriteria = [
-  { name: "Fluency & Coherence", score: 7.0, max: 9 },
-  { name: "Lexical Resource", score: 6.5, max: 9 },
-  { name: "Pronunciation", score: 7.0, max: 9 },
-  { name: "Grammar Range", score: 6.5, max: 9 },
-];
+export default function SpeakingPracticePage() {
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [currentPart, setCurrentPart] = useState(1);
+  const recognitionRef = useRef<any>(null);
 
-export default function SpeakingPage() {
+  useEffect(() => {
+    // Check if browser supports SpeechRecognition
+    const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event: any) => {
+        let currentTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          currentTranscript += event.results[i][0].transcript;
+        }
+        setTranscript(currentTranscript);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        setIsRecording(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsRecording(false);
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const startRecording = () => {
+    if (recognitionRef.current) {
+      setTranscript('');
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (error) {
+        console.error("Error starting recognition", error);
+      }
+    } else {
+      alert('Your browser does not support Speech Recognition. Please use Chrome, Edge, or Safari.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-400 flex items-center justify-center text-white shadow-lg shadow-orange-500/25">
-            <Mic className="h-7 w-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Speaking Module</h1>
-            <p className="text-muted-foreground text-sm">Practice with AI-powered conversation partner</p>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Badge variant="outline" className="gap-1.5 py-1.5 px-3"><BarChart3 className="h-3.5 w-3.5" />Band 7.0</Badge>
-          <Badge variant="outline" className="gap-1.5 py-1.5 px-3"><CheckCircle2 className="h-3.5 w-3.5" />3/6 Complete</Badge>
+    <div className="max-w-4xl mx-auto py-8 px-4 animate-fade-in space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">IELTS Speaking Practice</h1>
+          <p className="text-muted-foreground mt-2">Practice speaking with real-time transcription</p>
         </div>
       </div>
 
-      {/* Live Practice Banner */}
-      <Card className="border-0 bg-gradient-to-r from-orange-500 to-amber-400 overflow-hidden">
-        <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-white">
-            <div className="h-12 w-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center"><Video className="h-6 w-6" /></div>
-            <div>
-              <h3 className="font-semibold text-lg">Live AI Interview</h3>
-              <p className="text-white/80 text-sm">Simulate a real IELTS speaking test with instant feedback</p>
-            </div>
+      <Card className="border-2 shadow-sm">
+        <CardHeader className="bg-muted/30 border-b">
+          <CardTitle className="flex items-center gap-3 text-lg">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+              {currentPart}
+            </span>
+            Part {currentPart}: Let's talk about your hometown. Where are you from?
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 space-y-6">
+          <div className="min-h-[200px] rounded-xl border bg-muted/20 p-4 relative">
+            {!transcript && !isRecording && (
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                Press 'Start Recording' and begin speaking...
+              </div>
+            )}
+            {!transcript && isRecording && (
+              <div className="absolute inset-0 flex items-center justify-center text-primary text-sm gap-2 font-medium">
+                <Loader2 className="h-4 w-4 animate-spin" /> Listening...
+              </div>
+            )}
+            <p className="text-lg leading-relaxed whitespace-pre-wrap">{transcript}</p>
           </div>
-          <Button className="bg-white text-orange-600 hover:bg-white/90 font-semibold rounded-xl shadow-xl shrink-0">
-            <Mic className="mr-2 h-4 w-4" />Start Interview
-          </Button>
+
+          <div className="flex justify-center pt-4">
+            {isRecording ? (
+              <Button 
+                onClick={stopRecording} 
+                variant="destructive" 
+                size="lg" 
+                className="gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all"
+              >
+                <Square className="h-5 w-5 fill-current" />
+                Stop Recording
+              </Button>
+            ) : (
+              <Button 
+                onClick={startRecording} 
+                size="lg" 
+                className="gap-2 rounded-full px-8 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg hover:shadow-xl transition-all"
+              >
+                <Mic className="h-5 w-5" />
+                Start Recording
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-3">
-          <h2 className="text-lg font-semibold mb-1">Practice Sessions</h2>
-          {sessions.map((s) => (
-            <Card key={s.id} className="border bg-card card-hover">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${s.completed ? "bg-emerald-500/10 text-emerald-500" : "bg-muted text-muted-foreground"}`}>
-                    {s.completed ? <CheckCircle2 className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{s.title}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                      <Badge variant="secondary" className="text-[10px] py-0 h-5">{s.part}</Badge>
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{s.duration}</span>
-                      <Badge variant="secondary" className="text-[10px] py-0 h-5">{s.difficulty}</Badge>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {s.band && <span className="text-sm font-semibold text-emerald-500">Band {s.band}</span>}
-                  <Button size="sm" variant={s.completed ? "outline" : "default"} className={`rounded-lg text-xs ${!s.completed ? "gradient-primary text-white border-0" : ""}`}>
-                    {s.completed ? "Review" : "Practice"}<ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="space-y-4">
-          <Card className="border bg-card">
-            <CardContent className="p-5">
-              <h3 className="font-semibold mb-3">🎯 Speaking Scores</h3>
-              <div className="space-y-3">
-                {fluencyCriteria.map((c) => (
-                  <div key={c.name}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-muted-foreground">{c.name}</span>
-                      <span className="font-medium">{c.score}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400" style={{ width: `${(c.score / c.max) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border bg-card">
-            <CardContent className="p-5">
-              <h3 className="font-semibold mb-2">Your Stats</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Sessions Done</span><span className="font-medium">20</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Avg Band</span><span className="font-medium">6.8</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Best Band</span><span className="font-medium">7.5</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Practice Time</span><span className="font-medium">5h 40m</span></div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
     </div>
   );
 }

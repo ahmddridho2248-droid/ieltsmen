@@ -2,30 +2,43 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const data = [
-  { attempt: "Test 1", score: 6.0 },
-  { attempt: "Test 2", score: 6.5 },
-  { attempt: "Test 3", score: 6.5 },
-  { attempt: "Test 4", score: 7.0 },
-  { attempt: "Test 5", score: 7.5 },
-];
+type Evaluation = {
+  created_at: string;
+  overall_score: number;
+};
 
-export function ProgressChart() {
+export function ProgressChart({ evaluations }: { evaluations: Evaluation[] }) {
+  if (!evaluations || evaluations.length === 0) {
+    return (
+      <div className="h-[300px] w-full mt-4 flex items-center justify-center rounded-xl bg-muted/20 border border-dashed">
+        <p className="text-muted-foreground text-center">Belum ada data evaluasi. Yuk mulai latihan writing pertamamu!</p>
+      </div>
+    );
+  }
+
+  const data = evaluations.map((evalRecord) => {
+    const date = new Date(evalRecord.created_at);
+    return {
+      date: date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+      score: Number(evalRecord.overall_score)
+    };
+  });
+
   return (
     <div className="h-[300px] w-full mt-4">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.1} vertical={false} />
           <XAxis 
-            dataKey="attempt" 
+            dataKey="date" 
             axisLine={false}
             tickLine={false}
             tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
             dy={10}
           />
           <YAxis 
-            domain={[5, 9]} 
-            ticks={[5, 6, 7, 8, 9]}
+            domain={[0, 9]} 
+            ticks={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
             axisLine={false}
             tickLine={false}
             tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}

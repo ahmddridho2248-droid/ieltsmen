@@ -4,12 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { ProgressChart } from "./components/progress-chart";
+import { HistoryList } from "./components/history-list";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   
   const userName = user?.user_metadata?.full_name?.split(" ")[0] || "Student";
+
+  // Fetch writing evaluations
+  const { data: evaluations } = await supabase
+    .from('writing_evaluations')
+    .select('id, created_at, overall_score, question')
+    .eq('user_id', user?.id)
+    .order('created_at', { ascending: true });
 
   const moduleCards = [
     { title: "Listening", desc: "Audio comprehension practice", icon: Headphones, href: "/modules/listening", gradient: "from-blue-500 to-cyan-400" },
@@ -57,16 +65,19 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chart Section */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           <Card className="border bg-card h-full">
             <CardHeader>
               <CardTitle>Score Progression</CardTitle>
               <CardDescription>Simulated overall band progress over your last 5 attempts.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ProgressChart />
+              <ProgressChart evaluations={evaluations || []} />
             </CardContent>
           </Card>
+          
+          {/* History List */}
+          <HistoryList history={evaluations || []} />
         </div>
 
         {/* Quick Stats Sidebar */}
