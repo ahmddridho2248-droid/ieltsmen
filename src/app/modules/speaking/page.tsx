@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, Square, Loader2, Volume2, Send } from 'lucide-react';
+import { Mic, Square, Loader2, Volume2, Send, Timer } from 'lucide-react';
 
 // Define SpeechRecognition types
 declare global {
@@ -16,10 +16,15 @@ declare global {
 export default function SpeakingPracticePage() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [currentPart, setCurrentPart] = useState(1);
+  const [currentPart, setCurrentPart] = useState(2); // Set to 2 to show Part 2 UI by default for testing
   const recognitionRef = useRef<any>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
+
+  // New state for Part 2
+  const [prepTime, setPrepTime] = useState(60);
+  const [speakTime, setSpeakTime] = useState(120);
+  const [timerPhase, setTimerPhase] = useState<'idle' | 'prep' | 'speak'>('idle');
 
   const questionText = "Let's talk about your hometown. Where are you from?";
 
@@ -112,6 +117,43 @@ export default function SpeakingPracticePage() {
     }
   };
 
+  // Timer logic for Part 2
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (timerPhase === 'prep') {
+      interval = setInterval(() => {
+        setPrepTime((prev) => {
+          if (prev <= 1) {
+            setTimerPhase('speak');
+            startRecording();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (timerPhase === 'speak') {
+      interval = setInterval(() => {
+        setSpeakTime((prev) => {
+          if (prev <= 1) {
+            setTimerPhase('idle');
+            stopRecording();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => clearInterval(interval);
+  }, [timerPhase]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 animate-fade-in space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
@@ -123,21 +165,61 @@ export default function SpeakingPracticePage() {
 
       <Card className="border-2 shadow-sm">
         <CardHeader className="bg-muted/30 border-b flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-3 text-lg">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
-              {currentPart}
-            </span>
-            Part {currentPart}: {questionText}
-          </CardTitle>
+          {currentPart === 2 ? (
+            <CardTitle className="flex items-center gap-3 text-lg">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+                2
+              </span>
+              Part 2: Cue Card
+            </CardTitle>
+          ) : (
+            <CardTitle className="flex items-center gap-3 text-lg">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+                {currentPart}
+              </span>
+              Part {currentPart}: {questionText}
+            </CardTitle>
+          )}
           <Button variant="ghost" size="icon" onClick={handleTTS} title="Listen to question">
             <Volume2 className="h-5 w-5 text-primary" />
           </Button>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
+          {currentPart === 2 && (
+            <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
+              <h3 className="font-bold text-xl mb-4 text-primary">Describe a memorable journey you have made</h3>
+              <p className="mb-2 text-muted-foreground font-medium">You should say:</p>
+              <ul className="list-disc pl-6 space-y-2 mb-4 text-slate-700 dark:text-slate-300">
+                <li>Where you went</li>
+                <li>How you traveled</li>
+                <li>Why you went on the journey</li>
+              </ul>
+              <p className="text-muted-foreground font-medium">and explain why it is memorable</p>
+            </div>
+          )}
+
+          {currentPart === 2 && timerPhase !== 'idle' && (
+            <div className="flex flex-col items-center justify-center py-4 bg-muted/10 rounded-xl border border-muted/50">
+              <div className="text-sm font-semibold text-muted-foreground mb-1 uppercase tracking-wider">
+                {timerPhase === 'prep' ? 'Preparation Time' : 'Speaking Time'}
+              </div>
+              <div className={`text-5xl font-bold tracking-widest flex items-center gap-3 ${
+                (timerPhase === 'prep' && prepTime < 10) || (timerPhase === 'speak' && speakTime < 10) 
+                ? 'text-red-500 animate-pulse' 
+                : 'text-primary'
+              }`}>
+                <Timer className={`h-8 w-8 ${(timerPhase === 'prep' && prepTime < 10) || (timerPhase === 'speak' && speakTime < 10) ? 'text-red-500' : 'text-primary'}`} />
+                {timerPhase === 'prep' ? formatTime(prepTime) : formatTime(speakTime)}
+              </div>
+            </div>
+          )}
+
           <div className="min-h-[200px] rounded-xl border bg-muted/20 p-4 relative">
             {!transcript && !isRecording && (
               <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-                Press 'Start Recording' and begin speaking...
+                {currentPart === 2 
+                  ? "Press 'Start 1-Minute Prep' to begin..." 
+                  : "Press 'Start Recording' and begin speaking..."}
               </div>
             )}
             {!transcript && isRecording && (
@@ -151,23 +233,47 @@ export default function SpeakingPracticePage() {
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
             {isRecording ? (
               <Button 
-                onClick={stopRecording} 
+                onClick={() => {
+                  stopRecording();
+                  if (currentPart === 2) {
+                    setTimerPhase('idle');
+                    setSpeakTime(120);
+                    setPrepTime(60);
+                  }
+                }} 
                 variant="destructive" 
                 size="lg" 
                 className="gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all"
               >
                 <Square className="h-5 w-5 fill-current" />
-                Stop Recording
+                {currentPart === 2 && timerPhase === 'speak' ? 'Finish Early' : 'Stop Recording'}
               </Button>
             ) : (
-              <Button 
-                onClick={startRecording} 
-                size="lg" 
-                className="gap-2 rounded-full px-8 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg hover:shadow-xl transition-all"
-              >
-                <Mic className="h-5 w-5" />
-                Start Recording
-              </Button>
+              currentPart === 2 && timerPhase === 'idle' ? (
+                <Button 
+                  onClick={() => {
+                    setTimerPhase('prep');
+                    setPrepTime(60);
+                    setSpeakTime(120);
+                  }} 
+                  size="lg" 
+                  className="gap-2 rounded-full px-8 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all"
+                >
+                  <Timer className="h-5 w-5" />
+                  Start 1-Minute Prep
+                </Button>
+              ) : (
+                currentPart === 2 && timerPhase !== 'idle' ? null : (
+                  <Button 
+                    onClick={startRecording} 
+                    size="lg" 
+                    className="gap-2 rounded-full px-8 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg hover:shadow-xl transition-all"
+                  >
+                    <Mic className="h-5 w-5" />
+                    Start Recording
+                  </Button>
+                )
+              )
             )}
 
             {!isRecording && transcript && (
