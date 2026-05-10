@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, Square, Loader2 } from 'lucide-react';
+import { Mic, Square, Loader2, Volume2, Send } from 'lucide-react';
 
 // Define SpeechRecognition types
 declare global {
@@ -18,6 +18,43 @@ export default function SpeakingPracticePage() {
   const [transcript, setTranscript] = useState('');
   const [currentPart, setCurrentPart] = useState(1);
   const recognitionRef = useRef<any>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
+
+  const questionText = "Let's talk about your hometown. Where are you from?";
+
+  const handleTTS = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // Cancel any ongoing speech
+      const utterance = new SpeechSynthesisUtterance(questionText);
+      utterance.lang = 'en-GB';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      alert("Text-to-Speech is not supported in this browser.");
+    }
+  };
+
+  const submitEvaluation = async () => {
+    if (!transcript) return;
+    setIsEvaluating(true);
+    setEvaluationResult(null);
+    try {
+      const res = await fetch("/api/evaluate-speaking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: questionText, transcript })
+      });
+      if (!res.ok) throw new Error("Failed to evaluate");
+      const data = await res.json();
+      setEvaluationResult(data.evaluation);
+    } catch (error) {
+      console.error(error);
+      alert("Error evaluating response. Please try again.");
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
 
   useEffect(() => {
     // Check if browser supports SpeechRecognition
@@ -85,13 +122,16 @@ export default function SpeakingPracticePage() {
       </div>
 
       <Card className="border-2 shadow-sm">
-        <CardHeader className="bg-muted/30 border-b">
+        <CardHeader className="bg-muted/30 border-b flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-3 text-lg">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
               {currentPart}
             </span>
-            Part {currentPart}: Let's talk about your hometown. Where are you from?
+            Part {currentPart}: {questionText}
           </CardTitle>
+          <Button variant="ghost" size="icon" onClick={handleTTS} title="Listen to question">
+            <Volume2 className="h-5 w-5 text-primary" />
+          </Button>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           <div className="min-h-[200px] rounded-xl border bg-muted/20 p-4 relative">
@@ -108,7 +148,7 @@ export default function SpeakingPracticePage() {
             <p className="text-lg leading-relaxed whitespace-pre-wrap">{transcript}</p>
           </div>
 
-          <div className="flex justify-center pt-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
             {isRecording ? (
               <Button 
                 onClick={stopRecording} 
@@ -129,9 +169,38 @@ export default function SpeakingPracticePage() {
                 Start Recording
               </Button>
             )}
+
+            {!isRecording && transcript && (
+              <Button
+                onClick={submitEvaluation}
+                disabled={isEvaluating}
+                size="lg"
+                className="gap-2 rounded-full px-8 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-white shadow-lg hover:shadow-xl transition-all"
+              >
+                {isEvaluating ? (
+                  <><Loader2 className="h-5 w-5 animate-spin" /> Evaluating...</>
+                ) : (
+                  <><Send className="h-5 w-5" /> Submit Answer</>
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {evaluationResult && (
+        <Card className="border-2 border-emerald-500/30 shadow-xl shadow-emerald-500/10 animate-fade-in overflow-hidden">
+          <div className="h-2 w-full bg-gradient-to-r from-emerald-500 to-teal-400" />
+          <CardHeader>
+            <CardTitle className="text-xl">Evaluation Result</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap leading-relaxed text-sm md:text-base">
+              {evaluationResult}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
