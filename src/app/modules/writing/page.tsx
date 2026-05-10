@@ -8,14 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 
-const MOCK_QUESTIONS = [
-  "Some people believe that the rapid development of artificial intelligence will lead to widespread unemployment, while others argue it will create new types of jobs and boost the economy.\n\nDiscuss both these views and give your own opinion.",
-  "In many countries, the proportion of older people is steadily increasing. Does this trend have more positive or negative effects on society?\n\nGive your own opinion and include relevant examples.",
-  "Nowadays, many families have both parents working full time. What are the advantages and disadvantages of this trend?\n\nDiscuss both sides and give your own opinion.",
-  "Some people think that university education should be free for everyone. Others think that students should pay for their higher education.\n\nDiscuss both these views and give your own opinion.",
-  "The internet has dramatically changed the way people communicate and work. However, some argue it has also isolated people socially.\n\nTo what extent do you agree or disagree?"
-];
-
 type EvaluationResult = {
   overallBand: number;
   scores: {
@@ -35,21 +27,24 @@ export default function WritingModulePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
 
-  const [currentQuestion, setCurrentQuestion] = useState(MOCK_QUESTIONS[0]);
+  const [currentQuestion, setCurrentQuestion] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefreshQuestion = async () => {
     setIsRefreshing(true);
-    // Simulate a brief delay for UI feedback
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    let newQuestion;
-    do {
-      newQuestion = MOCK_QUESTIONS[Math.floor(Math.random() * MOCK_QUESTIONS.length)];
-    } while (newQuestion === currentQuestion && MOCK_QUESTIONS.length > 1);
-    
-    setCurrentQuestion(newQuestion);
-    setIsRefreshing(false);
+    try {
+      const res = await fetch("/api/generate-writing-question");
+      if (!res.ok) throw new Error("Failed to fetch new question");
+      const data = await res.json();
+      if (data.question) {
+        setCurrentQuestion(data.question);
+      }
+    } catch (error) {
+      console.error("Error fetching question:", error);
+      toast.error("Failed to generate a new question. Please try again.");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -186,12 +181,11 @@ export default function WritingModulePage() {
                 <p className="font-semibold mb-3 text-foreground/80">You should spend about 40 minutes on this task.</p>
                 <p className="mb-3 text-muted-foreground">Write about the following topic:</p>
                 
-                <div className="p-5 bg-background rounded-xl border shadow-sm font-medium italic text-lg text-foreground/90 border-l-4 border-l-emerald-500">
-                  "{currentQuestion.split('\n\n')[0]}"
+                <div className="p-5 bg-background rounded-xl border shadow-sm font-medium text-lg text-foreground/90 border-l-4 border-l-emerald-500 whitespace-pre-wrap">
+                  {currentQuestion || "Loading question..."}
                 </div>
                 
-                <p className="mt-5 font-semibold text-foreground/90">{currentQuestion.split('\n\n')[1]}</p>
-                <p className="mt-2 text-sm text-muted-foreground">Give reasons for your answer and include any relevant examples from your own knowledge or experience.</p>
+                <p className="mt-4 text-sm text-muted-foreground">Give reasons for your answer and include any relevant examples from your own knowledge or experience.</p>
               </div>
               
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">
