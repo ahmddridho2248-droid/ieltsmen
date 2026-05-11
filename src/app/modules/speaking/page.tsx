@@ -20,6 +20,7 @@ export default function SpeakingPracticePage() {
   const [questionText, setQuestionText] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const isRecordingRef = useRef<boolean>(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
 
@@ -51,6 +52,13 @@ export default function SpeakingPracticePage() {
 
   useEffect(() => {
     handleRefreshQuestion();
+
+    // Cleanup function to stop TTS when component unmounts (Ghost Voice fix)
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const readQuestion = () => {
@@ -111,7 +119,17 @@ export default function SpeakingPracticePage() {
       };
 
       recognitionRef.current.onend = () => {
-        setIsRecording(false);
+        if (isRecordingRef.current && recognitionRef.current) {
+          // Pause death fix: Restart recognition if it ends while still supposed to be recording
+          try { 
+            recognitionRef.current.start(); 
+          } catch(e) { 
+            console.error('Failed to restart recognition:', e); 
+          }
+        } else {
+          setIsRecording(false);
+          isRecordingRef.current = false;
+        }
       };
     }
 
@@ -129,10 +147,12 @@ export default function SpeakingPracticePage() {
       try {
         recognitionRef.current.start();
         setIsRecording(true);
+        isRecordingRef.current = true;
       } catch (error: any) {
         if (error.message && error.message.includes("already started")) {
           // Silent fail for already started error, just update state
           setIsRecording(true);
+          isRecordingRef.current = true;
         } else {
           console.error("Error starting recognition", error);
         }
@@ -144,6 +164,7 @@ export default function SpeakingPracticePage() {
 
   const stopRecording = () => {
     if (recognitionRef.current) {
+      isRecordingRef.current = false;
       recognitionRef.current.stop();
       setIsRecording(false);
     }
@@ -206,62 +227,71 @@ export default function SpeakingPracticePage() {
         </Button>
       </div>
 
-      <Card className="border-2 shadow-sm">
-        <CardHeader className="bg-muted/30 border-b flex flex-row items-center justify-between">
+      <Card className={`border-2 shadow-md transition-all duration-300 mx-auto w-full ${currentPart === 2 ? 'bg-[#fffdf2] border-[#fcd34d]/50 shadow-lg' : 'bg-card'}`}>
+        <CardHeader className={`${currentPart === 2 ? 'border-b border-[#fcd34d]/30' : 'bg-muted/30 border-b'} flex flex-row items-center justify-between`}>
           <CardTitle className="flex items-center gap-3 text-lg">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+            <span className={`flex h-8 w-8 items-center justify-center rounded-full font-bold text-sm ${currentPart === 2 ? 'bg-amber-500 text-white' : 'bg-primary/10 text-primary'}`}>
               {currentPart}
             </span>
             Part {currentPart} {currentPart === 2 && ': Cue Card'}
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={readQuestion} title="Listen to question">
-            <Volume2 className="h-5 w-5 text-primary" />
+          <Button variant="ghost" size="icon" onClick={readQuestion} title="Listen to question" className={currentPart === 2 ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-100/50' : ''}>
+            <Volume2 className="h-5 w-5" />
           </Button>
         </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm min-h-[100px] flex items-center justify-center">
+        <CardContent className="p-8 space-y-8">
+          <div className={`${currentPart === 2 ? 'bg-white border-2 border-[#fcd34d]/30 shadow-inner rounded-xl p-8' : 'bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 shadow-sm'} rounded-xl p-6 min-h-[120px] flex items-center justify-center`}>
             {isRefreshing ? (
                <div className="flex items-center justify-center text-muted-foreground font-medium gap-3">
                  <Loader2 className="h-5 w-5 animate-spin" />
                  Generating new question...
                </div>
             ) : (
-               <div className="w-full text-lg leading-relaxed font-medium whitespace-pre-wrap text-slate-800 dark:text-slate-200">
+               <div className={`w-full leading-relaxed font-medium whitespace-pre-wrap ${currentPart === 2 ? 'text-xl text-slate-800' : 'text-lg text-slate-800 dark:text-slate-200'}`}>
                  {questionText}
                </div>
             )}
           </div>
 
           {currentPart === 2 && timerPhase !== 'idle' && (
-            <div className="flex flex-col items-center justify-center py-4 bg-muted/10 rounded-xl border border-muted/50">
-              <div className="text-sm font-semibold text-muted-foreground mb-1 uppercase tracking-wider">
+            <div className={`flex flex-col items-center justify-center py-6 rounded-2xl border-2 ${timerPhase === 'speak' ? 'bg-orange-500/5 border-orange-500/20' : 'bg-blue-500/5 border-blue-500/20'}`}>
+              <div className="text-sm font-bold text-muted-foreground mb-2 uppercase tracking-widest">
                 {timerPhase === 'prep' ? 'Preparation Time' : 'Speaking Time'}
               </div>
-              <div className={`text-5xl font-bold tracking-widest flex items-center gap-3 ${
-                (timerPhase === 'prep' && prepTime < 10) || (timerPhase === 'speak' && speakTime < 10) 
+              <div className={`text-6xl font-black tracking-widest flex items-center gap-4 ${
+                (timerPhase === 'prep' && prepTime <= 10) || (timerPhase === 'speak' && speakTime <= 10) 
                 ? 'text-red-500 animate-pulse' 
-                : 'text-primary'
+                : (timerPhase === 'speak' ? 'text-orange-500' : 'text-blue-500')
               }`}>
-                <Timer className={`h-8 w-8 ${(timerPhase === 'prep' && prepTime < 10) || (timerPhase === 'speak' && speakTime < 10) ? 'text-red-500' : 'text-primary'}`} />
+                <Timer className={`h-10 w-10`} />
                 {timerPhase === 'prep' ? formatTime(prepTime) : formatTime(speakTime)}
               </div>
             </div>
           )}
 
-          <div className="min-h-[200px] rounded-xl border bg-muted/20 p-4 relative">
+          <div className="min-h-[250px] rounded-2xl border-2 bg-muted/10 p-6 relative">
             {!transcript && !isRecording && (
-              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-base">
                 {currentPart === 2 
                   ? "Press 'Start 1-Minute Prep' to begin..." 
                   : "Press 'Start Recording' and begin speaking..."}
               </div>
             )}
-            {!transcript && isRecording && (
-              <div className="absolute inset-0 flex items-center justify-center text-primary text-sm gap-2 font-medium">
-                <Loader2 className="h-4 w-4 animate-spin" /> Listening...
+            {isRecording && (
+              <div className="absolute top-4 right-4 flex items-center gap-2 bg-red-500/10 text-red-600 px-3 py-1.5 rounded-full text-sm font-bold tracking-wide">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                </span>
+                RECORDING...
               </div>
             )}
-            <p className="text-lg leading-relaxed whitespace-pre-wrap">{transcript}</p>
+            {!transcript && isRecording && (
+              <div className="absolute inset-0 flex items-center justify-center text-primary text-base gap-3 font-medium">
+                <Loader2 className="h-5 w-5 animate-spin" /> Listening...
+              </div>
+            )}
+            <p className="text-xl sm:text-2xl leading-relaxed whitespace-pre-wrap pt-8">{transcript}</p>
           </div>
 
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
@@ -277,7 +307,7 @@ export default function SpeakingPracticePage() {
                 }} 
                 variant="destructive" 
                 size="lg" 
-                className="gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all"
+                className="gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all h-14 text-base font-bold animate-pulse"
               >
                 <Square className="h-5 w-5 fill-current" />
                 {currentPart === 2 && timerPhase === 'speak' ? 'Finish Early' : 'Stop Recording'}

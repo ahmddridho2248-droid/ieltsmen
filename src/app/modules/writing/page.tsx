@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PenTool, Clock, FileText, Send, AlertCircle, RefreshCw, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { PenTool, Clock, FileText, Send, AlertCircle, RefreshCw, Loader2, CheckCircle2, XCircle, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,8 +49,27 @@ export default function WritingModulePage() {
 
   useEffect(() => {
     handleRefreshQuestion();
+    
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const readQuestion = () => {
+    if (!currentQuestion) return;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(currentQuestion);
+      utterance.lang = 'en-GB';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      toast.error("Text-to-Speech is not supported in this browser.");
+    }
+  };
 
   const supabase = createClient();
 
@@ -153,22 +172,35 @@ export default function WritingModulePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[600px] mb-8">
         
         {/* Left Side: Mock Prompt */}
-        <Card className="border bg-card shadow-sm overflow-hidden flex flex-col h-full">
+        <Card className="border bg-muted/30 shadow-sm overflow-hidden flex flex-col h-full">
           <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-400 w-full shrink-0" />
-          <CardHeader className="shrink-0 pb-4 flex flex-row items-center justify-between">
+          <CardHeader className="shrink-0 pb-4 flex flex-row items-center justify-between bg-card border-b">
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileText className="h-5 w-5 text-emerald-500" />
               Essay Prompt
             </CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRefreshQuestion} 
-              disabled={isRefreshing || isSubmitting || !!evaluation}
-            >
-              {isRefreshing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              Refresh Soal
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={readQuestion} 
+                disabled={!currentQuestion}
+                title="Listen to question"
+                className="text-muted-foreground hover:text-emerald-600"
+              >
+                <Volume2 className="h-4.5 w-4.5" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRefreshQuestion} 
+                disabled={isRefreshing || isSubmitting || !!evaluation}
+                className="h-9"
+              >
+                {isRefreshing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Refresh Soal
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="overflow-y-auto flex-1 pb-6">
             <div className="space-y-6 text-base leading-relaxed">
